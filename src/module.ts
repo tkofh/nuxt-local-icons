@@ -23,7 +23,6 @@ export interface ModuleOptions {
 
 interface ProcessedIcon {
   key: string
-  imports: string
   renderFunction: string
 }
 
@@ -55,8 +54,6 @@ export default defineNuxtModule<ModuleOptions>({
     }
 
     if (iconSourceDirectory !== '') {
-      const IMPORTS_RE = /import[^\n]+/
-
       nuxt.options.alias['#icons'] = addTemplate({
         write: true,
         filename: buildResolver.resolve('icons.ts'),
@@ -76,19 +73,12 @@ export default defineNuxtModule<ModuleOptions>({
                   const { code } = compile(source, {
                     mode: 'module',
                     isTS: true,
+                    inline: true,
                   })
-
-                  const imports = IMPORTS_RE.exec(code)![0]
-
-                  const renderFunction = code
-                    .replace(IMPORTS_RE, '')
-                    .replace('export function render', `function`)
-                    .trim()
 
                   return {
                     key,
-                    imports,
-                    renderFunction,
+                    renderFunction: code,
                   }
                 })
               )
@@ -104,8 +94,7 @@ export default defineNuxtModule<ModuleOptions>({
           }, [])
 
           return outdent`
-            ${results[0].imports}
-            import { defineComponent, h } from 'vue'
+            import { createElementVNode as _createElementVNode, openBlock as _openBlock, createElementBlock as _createElementBlock, defineComponent, h } from "vue"
 
             const ${options.componentName}_lookup = {
             ${results
@@ -125,14 +114,14 @@ export default defineNuxtModule<ModuleOptions>({
                   required: true,
                 }
               },
-              setup: (props) => () => {
+              setup: (props) => (_ctx: any, _cache: any) => {
                 const rf = ${options.componentName}_lookup[props.icon]
                 ${
                   options.warnMissingIcon && nuxt.options.dev
                     ? `if(!rf) { console.warn(\`[${options.componentName}]: Missing Icon '$\{props.icon}'\`) }`
                     : ''
                 }
-                return rf ? h(rf) : h('svg')
+                return rf ? rf(_ctx, _cache) : h('svg')
               }
             })
           `
